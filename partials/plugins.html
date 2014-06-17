@@ -5,6 +5,7 @@
 			<th>Name</th>
 			<th>Description</th>
 			<th>ID</th>
+			<th></th>
 		</tr>
 	</thead>
 	<tbody>
@@ -12,6 +13,7 @@
 			<td>{{plugin.name}}</td>
 			<td>{{plugin.description}}</td>
 			<td>{{plugin.id}}</td>
+			<td><a style='cursor: pointer;' ng-click="rest({target: 'delete', pluginId: plugin.id})"><i class="icon-remove"></i> Delete</a></td>
 		</tr>
 		<tr ng-if="plugins.length == 0">
 			<td colspan="3">
@@ -20,7 +22,7 @@
 		</tr>
 	</tbody>
 </table>
-<a href="#">
+<a style='cursor: pointer;' ng-click="rest({target: 'refresh'})">
 	<i class="icon-refresh"></i> Refresh List
 </a>
 
@@ -28,9 +30,9 @@
 	<fieldset>
 		<legend>Add Local Plugin</legend>
 		<div class="control-group">
-			<input type="file" ng-model="plugin" />
+			<input type="file" id="newPlugin" />
 		</div>
-		<a href="#">
+		<a style='cursor: pointer;' ng-click="rest({target: 'upload'})">
 			<i class="icon-plus"></i> Upload
 		</a>
 	</fieldset>
@@ -38,9 +40,9 @@
 		<legend>Add Remote Plugin</legend>
 		<div class="control-group">
 			<label class="control-label">URL:</label>
-			<input type="text" ng-model="pluginURL" />
+			<input type="text" ng-model="newPluginURL" />
 		</div>
-		<a href="#">
+		<a style='cursor: pointer;' ng-click="rest({target: 'add'})">
 			<i class="icon-plus"></i> Add
 		</a>
 	</fieldset>
