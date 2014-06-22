@@ -1,12 +1,81 @@
+app.service('socket', ['$rootScope', 'notificationService', 'historyHttp', function($rootScope, notificationService, historyHttp){
+	this.executionQueue = [];
+	this.updateQueue = function(id, status){
+		var element = this.executionQueue.find(function(item){
+			return (item.id == id);
+		});
+		if (element != null)
+			element.crawlStatus = status;
+	};
+	this.removeQueue = function(id) {
+		var element = this.executionQueue.find(function(item){
+			return (item.id == id);
+		});
+		if (element != null)
+			this.executionQueue.splice(this.executionQueue.indexOf(element), 1);
+	};
+	this.socket = null;
+	this.connectSocket = function(){
+		var loc = window.location, host;
+		if (loc.protocol === "https:") {
+			host = "wss:";
+		} else {
+			host = "ws:";
+		}
+		host += "//" + loc.host;
+		host += loc.pathname + "socket";
+
+		try {
+			var service = this;
+			this.socket = new WebSocket(host);
+			
+			this.socket.onmessage = function(msg){
+				if (msg.data.indexOf('log-') == 0)
+					$('#logPanel').append('<p>'+msg.data.slice(4)+'</p>');
+				if (msg.data.indexOf('queue-') == 0) {
+					var record = JSON.parse(msg.data.slice(6));
+					record.plugins = [];
+					service.executionQueue.push(record);
+				}
+				if (msg.data.indexOf('init-') == 0)
+					service.updateQueue(msg.data.slice(5), "initializing");
+				if (msg.data.indexOf('run-') == 0)
+					service.updateQueue(msg.data.slice(4), "running");
+				if (msg.data.indexOf('fail-') == 0) {
+					service.updateQueue(msg.data.slice(5), "failure");
+					setTimeout(function(){service.removeQueue(msg.data.slice(5));}, 5000);
+				}
+				if (msg.data.indexOf('success-') == 0) {
+					service.updateQueue(msg.data.slice(8), "success");
+					setTimeout(function(){service.removeQueue(msg.data.slice(8));}, 5000);
+				}
+				if (msg.data.indexOf('message-') == 0) {
+					var positivity = 0;
+					if (msg.data.indexOf('success-') == 8) {
+						positivity = 1;
+						notificationService.notify(msg.data.slice(16), positivity);
+					} else if (msg.data.indexOf('error-') == 8) {
+						positivity = -1;
+						notificationService.notify(msg.data.slice(14), positivity);
+					} else {
+						notificationService.notify(msg.data.slice(8), positivity);
+					}
+				}
+			};
+			this.socket.onclose = function(){
+				service.connectSocket();
+			};
+		}catch(exception){
+			 alert('Error'+exception);
+		}
+	};
+}]);
+
 app.service('configHttp', ['$http', 'notificationService', function($http, notificationService){
 	this.getConfigurations = function(){
 		var request = $http({
-		    url: 'http://jsonstub.com/rest/configurations',
-		    method: 'GET',
-		    headers: {
-				'JsonStub-User-Key': '83f57ff1-339a-45c1-af3a-c3142b7e19e5',
-				'JsonStub-Project-Key': '2196e73e-210d-46a7-bf01-775535a4d294'
-			}
+		    url: '/rest/configurations',
+		    method: 'GET'
 		});
 		return request.then(function(result){
 			return result.data;
@@ -16,12 +85,8 @@ app.service('configHttp', ['$http', 'notificationService', function($http, notif
 	};
 	this.getConfiguration = function(configId){
 		var request = $http({
-			url: 'http://jsonstub.com/rest/configurations/' + configId,
-		    method: 'GET',
-		    headers: {
-		        'JsonStub-User-Key': '83f57ff1-339a-45c1-af3a-c3142b7e19e5',
-		        'JsonStub-Project-Key': '2196e73e-210d-46a7-bf01-775535a4d294'
-		    }
+			url: '/rest/configurations/' + configId,
+		    method: 'GET'
 		});
 		return request.then(function(result){
 			return result.data;
@@ -54,13 +119,9 @@ app.service('configHttp', ['$http', 'notificationService', function($http, notif
 	};
 	this.updateConfiguration = function(config, configId){
 		var request = $http({
-			url: 'http://jsonstub.com/rest/configurations/awefasefas',
+			url: '/rest/configurations/awefasefas',
 		    method: 'PUT',
-		    data: JSON.stringify(config, this.cleanJSON),
-		    headers: {
-		        'JsonStub-User-Key': '83f57ff1-339a-45c1-af3a-c3142b7e19e5',
-		        'JsonStub-Project-Key': '2196e73e-210d-46a7-bf01-775535a4d294'
-			}
+		    data: JSON.stringify(config, this.cleanJSON)
 		});
 		request.then(function(result){
 			notificationService.notify("Configuration Saved", 1);
@@ -71,7 +132,7 @@ app.service('configHttp', ['$http', 'notificationService', function($http, notif
 	this.deleteConfiguration = function(configId){
 		var request = $http({
 			method: 'DELETE',
-			url: '/rest/configurations' + configId
+			url: '/rest/configurations/' + configId
 		});
 		request.then(function(result){
 			notificationService.notify("Configuration Deleted", 1);
@@ -87,21 +148,47 @@ app.service('configHttp', ['$http', 'notificationService', function($http, notif
 	}
 }]);
 
+app.service('configAdd', [function(){
+	this.addCondition = function(config){
+		config.pageConditions.push({condition: 'url', expression: ''});
+	};
+	this.addFilter = function(config){
+		config.comparators.push({type: 'attribute', expression: ''});
+	};
+	this.addFormField = function(config){
+		config.formInputValues.push({name: '', value: ''});
+	}
+	this.addInvariant = function(config){
+		config.invariants.push({condition: 'url', expression: ''});
+	}
+	this.addPlugin = function(config){
+		config.plugins.push({});
+	}
+	this.deletePlugin = function(config, index){
+		config.plugins.splice(index, 1);
+	}
+}]);
+
 app.service('pluginHttp', ['$http', 'notificationService', function($http, notificationService){
 	this.getPlugins = function(){
 		var request = $http({
 			method: 'GET',
-			url: 'http://jsonstub.com/rest/plugins',
-			headers: {
-		        'JsonStub-User-Key': '83f57ff1-339a-45c1-af3a-c3142b7e19e5',
-		        'JsonStub-Project-Key': '2196e73e-210d-46a7-bf01-775535a4d294'
-		    }
+			url: '/rest/plugins'
 		});
 		return request.then(function(result){
 			return result.data;
 		});
 	};
-	this.addPlugin = function(fileName, data, url, callback) {
+	this.getPlugin = function(pluginId){
+		var request = $http({
+			method: 'GET',
+			url: '/rest/plugins/' + pluginId
+		});
+		return request.then(function(result){
+			return result.data;
+		});
+	};
+	this.addPlugin = function(fileName, data, url) {
 		var fd = new FormData();
 		fd.append("name", fileName);
 		if(data) {
@@ -111,32 +198,57 @@ app.service('pluginHttp', ['$http', 'notificationService', function($http, notif
 		}
 		return $http({
 			method: 'POST',
-			url: 'http://jsonstub.com/rest/plugins',
-			data: fd,
-			headers: {
-		        'JsonStub-User-Key': '83f57ff1-339a-45c1-af3a-c3142b7e19e5',
-		        'JsonStub-Project-Key': '2196e73e-210d-46a7-bf01-775535a4d294'
-		    }
+			url: '/rest/plugins',
+			data: fd
 		});
 	};
-	this.getNewConfiguration = function(){
+	this.deletePlugin = function(pluginId){
 		var request = $http({
-		    url: 'http://jsonstub.com/rest/configurations/new',
-		    method: 'GET',
-		    headers: {
-		        'JsonStub-User-Key': '83f57ff1-339a-45c1-af3a-c3142b7e19e5',
-		        'JsonStub-Project-Key': '2196e73e-210d-46a7-bf01-775535a4d294'
-		    }
+		    url: '/rest/plugins/' + pluginId,
+		    method: 'DELETE'
+		});
+		request.then(function(result){
+			notificationService.notify("Plugin Deleted", 1);
+		}, function(error){
+			notificationService.notify("Error Deleting Plugin", -1);
+		})
+	};
+}]);
+
+app.service('historyHttp', ['$http', 'notificationService', function($http, notificationService){
+	this.getHistory = function(active){
+		var data = '';
+		if(active) data = {active: true};
+		var request = $http({
+			method: 'GET',
+			url: '/rest/history',
+			data: data
 		});
 		return request.then(function(result){
 			return result.data;
-		})
+		});
+	};
+	this.getCrawl = function(crawlId){
+		var request = $http({
+			method: 'GET',
+			url: '/rest/history/' + crawlId
+		});
+		return request.then(function(result){
+			return result.data;
+		});
+	};
+	this.addCrawl = function(config){
+		return $http({
+			method: 'POST',
+			url: '/rest/history',
+			data: {configurationId: config.id}
+		});
 	};
 }]);
 
 app.service('pluginAdd', ['pluginHttp', 'notificationService', function(pluginHttp, notificationService){
 	this.addFile = function(){
-		var file = angular.element("pluginFile").val();
+		var file = angular.element("#pluginFile").get(0).files[0];
 		if(!file){
 			alert("Please select a file");
 			return;
@@ -153,13 +265,14 @@ app.service('pluginAdd', ['pluginHttp', 'notificationService', function(pluginHt
 				notificationService.notify('Plugin Uploaded', 1);
 			}, function(error){
 				notificationService.notify('Error Uploading Plugin', -1);
+				console.log(error);
 			});
 		}
 		reader.readAsDataURL(file);
 	};
-	this.addURL = function() {
-		var url = this.get("url");
-		if(!url) {
+	this.addURL = function(url) {
+		console.log(url);
+		if(url.length == 0) {
 			alert("Please enter a url");
 			return;
 		}

@@ -6,13 +6,23 @@ app.config(['$stateProvider', '$urlRouterProvider', function ($stateProvider, $u
 			{
 				url: '/configurations',
 				controller: 'ConfigIndexController',
-				templateUrl: 'partials/config.html'
+				templateUrl: 'partials/config.html',
+				resolve: {
+					configs: function(configHttp){
+						return configHttp.getConfigurations();
+					}
+				}
 			})
 		.state('configNew',
 			{
 				url: '/configurations/new',
 				controller: 'ConfigNewController',
-				templateUrl: 'partials/configNew.html'
+				templateUrl: 'partials/configNew.html',
+				resolve: {
+					config: function(configHttp){
+						return configHttp.getNewConfiguration();
+					}
+				}
 			})
 		.state('configNew.copy',
 			{
@@ -24,7 +34,12 @@ app.config(['$stateProvider', '$urlRouterProvider', function ($stateProvider, $u
 			{
 				url: '/configurations/:configId',
 				templateUrl: 'partials/configView/configDetail.html',
-				controller: 'ConfigController'
+				controller: 'ConfigController',
+				resolve: {
+					config: function($stateParams, configHttp){
+						return configHttp.getConfiguration($stateParams.configId);
+					}
+				}
 			})
 		.state('configDetail.main',
 			{
@@ -44,20 +59,35 @@ app.config(['$stateProvider', '$urlRouterProvider', function ($stateProvider, $u
 		.state('configDetail.plugins',
 			{
 				url: '^/configurations/:configId/plugins',
-				templateUrl: 'partials/configView/configDetail.plugins.html'
+				templateUrl: 'partials/configView/configDetail.plugins.html',
+				controller: 'ConfigPluginsController',
+				resolve: {
+					plugins: function(pluginHttp){
+						return pluginHttp.getPlugins();
+					}
+				}
 			})
 		.state('plugins',
 			{
 				url: '/plugins',
 				controller: 'PluginsController',
 				templateUrl: 'partials/plugins.html',
+				resolve: {
+					plugins: function(pluginHttp){
+						return pluginHttp.getPlugins();
+					}
+				}
 			})
 		.state('history',
 			{
 		    	url: '/history',
 				controller: 'HistoryIndexController',
     			templateUrl: 'partials/history.html',
-
+				resolve: {
+					crawlRecords: function(historyHttp){
+						return historyHttp.getHistory();
+					}
+				}
 			})
 		.state('history.filter',
 			{
@@ -68,7 +98,13 @@ app.config(['$stateProvider', '$urlRouterProvider', function ($stateProvider, $u
 		.state('crawl', 
 			{
 				url: '/history/:crawlId',
-				templateUrl: 'partials/crawlView/crawl.html'
+				templateUrl: 'partials/crawlView/crawl.html',
+				controller: 'CrawlRecordController',
+				resolve: {
+					crawl: function($stateParams, historyHttp){
+						return historyHttp.getCrawl($stateParams.crawlId);
+					}
+				}
 			})
 		.state('crawl.log',
 			{
@@ -78,17 +114,18 @@ app.config(['$stateProvider', '$urlRouterProvider', function ($stateProvider, $u
 		.state('crawl.pluginOutput',
 			{
 				url: '^/history/:crawlId/plugin/:pluginId',
-				templateUrl: 'partials/crawlView/crawl.pluginOutput.html'
+				templateUrl: 'partials/crawlView/crawl.pluginOutput.html',
+				controller: 'CrawlRecordPluginController'
 			});
 	$urlRouterProvider
 		.otherwise('/configurations');
 }]);
 
-app.run(['$rootScope', '$state', '$stateParams', 'configHttp', function($rootScope, $state, $stateParams, configHttp){
+app.run(['$rootScope', '$state', '$stateParams', 'configHttp', 'pluginHttp', 'historyHttp', 'socket', function($rootScope, $state, $stateParams, configHttp, pluginHttp, historyHttp, socket){
 	$rootScope.$state = $state;
 	$rootScope.$stateParams = $stateParams;
 	
-	$rootScope.browsers = [{name: "Mozilla Firefox", value: "FIREFOX"}, {name: "Google Chrome", value: "CHROME"}, {name: "Internet Explorer", value: "INTERNET EXPLORER"}];
+	$rootScope.browsers = [{name: "Mozilla Firefox", value: "FIREFOX"}, {name: "Google Chrome", value: "CHROME"}, {name: "Internet Explorer", value: "INTERNET EXPLORER"}, {name: "PhantomJS", value:"PHANTOMJS"}];
 	
 	$rootScope.clickConditions = [
 		{name: "With Attribute (name=value):", value:"wAttribute"},
@@ -133,16 +170,31 @@ app.run(['$rootScope', '$state', '$stateParams', 'configHttp', function($rootSco
 		 {name: "Ignore XPath:", value:"xPath"},
 		 {name: "Ignore within Distance Edit Threshold:", value:"distance"}];
 	
-	configHttp.getConfigurations().then(function(data){
-		$rootScope.configurations = data;
-	});
+	$rootScope.configurations = [];
+	$rootScope.plugins = [];
+	$rootScope.crawlRecords = [];
 	
-	$rootScope.plugins = [{id:"dummy-plugin",name:"Dummy Plugin",description:"Intended for testing purposes only. Does not contain any implementation classes.",
-							jarFile:"E:\\crawljax-web-3.5.1\\plugins\\dummy-plugin.jar",crawljaxVersions:["3.4-SNAPSHOT"],
-							parameters:[{id:"test_textbox",displayName:"Test Textbox",type:"textbox",options:{},"value":null},
-										{id:"test_checkbox",displayName:"Test Checkbox",type:"checkbox",options:{},"value":true},
-										{id:"test_select",displayName:"Test Select",type:"select",options:{"Option 1":"1","Option 2":"2","Option 3":"3"},"value":null}]}];
-	$rootScope.crawlRecords = [{"id":1,"configurationId":"asdf","configurationName":"asdf","createTime":null,"startTime":1400773888354,"duration":23882,"outputFolder":"out\\crawl-records\\1","crawlStatus":"success","plugins":{}}];
+	socket.executionQueue = historyHttp.getHistory(true);
+	if(!("WebSocket" in window)) {
+		alert('Need a browser that supports Sockets');
+	} else {
+		socket.connectSocket();
+	}
+	
+	$rootScope.$on('$stateChangeStart', function(event, toState, fromState){
+		if(typeof angular.element("#config_form")[0] != "undefined"){
+			switch(fromState.name){
+				case 'configDetail.main':
+				case 'configDetail.rules':
+				case 'configDetail.assertions':
+				case 'configDetail.plugins':
+					if(!validateForm('config_form')) event.preventDefault();
+					break;
+				default:
+					break;
+			}
+		}
+	});
 	
 	$rootScope.$on('$stateChangeSuccess', function(event, toState, fromState){
 		var sideNav = angular.element("#sideNav").scope();
@@ -170,9 +222,11 @@ app.run(['$rootScope', '$state', '$stateParams', 'configHttp', function($rootSco
 				break;
 			case 'plugins':
 				breadcrumb.links = [{text: 'Plugins'}];
+				sideNav.links = [];
 				break;
 			case 'history':
 				breadcrumb.links = [{text: 'History'}];
+				sideNav.links = [];
 				break;
 			case 'history.filter':
 				sideNav.links = [{icon: 'icon-book', target: 'history', action: false, text: 'All Crawl Records'}];
@@ -180,7 +234,7 @@ app.run(['$rootScope', '$state', '$stateParams', 'configHttp', function($rootSco
 				break;
 			case 'crawl.log':
 			case 'crawl.pluginOutput':
-				sideNav.links = [{icon: 'icon-wrench', target: 'configDetail.main({configId: {{crawl.configurationId}} })', action: false, text: 'Configuration'}]
+				sideNav.links = [{icon: 'icon-wrench', target: 'configDetail.main({configId: configId})', action: false, text: 'Configuration'}]
 				breadcrumb.links = [{text: 'History', target: 'history'}, {text: 'Crawl ' + $stateParams.crawlId}];
 				break;
 			default:
