@@ -152,21 +152,33 @@ app.service('configAdd', [function(){
 	this.addCondition = function(config){
 		config.pageConditions.push({condition: 'url', expression: ''});
 	};
+	this.deleteCondition = function(config, index){
+		config.pageConditions.splice(index, 1);
+	};
 	this.addFilter = function(config){
 		config.comparators.push({type: 'attribute', expression: ''});
 	};
+	this.deleteFilter = function(config, index){
+		config.comparators.splice(index, 1);
+	};
 	this.addFormField = function(config){
 		config.formInputValues.push({name: '', value: ''});
-	}
+	};
+	this.deleteFormField = function(config, index){
+		config.formInputValues.splice(index, 1);
+	};
 	this.addInvariant = function(config){
 		config.invariants.push({condition: 'url', expression: ''});
-	}
+	};
+	this.deleteInvariant = function(config, index){
+		config.invariants.splice(index, 1);
+	};
 	this.addPlugin = function(config){
 		config.plugins.push({});
-	}
+	};
 	this.deletePlugin = function(config, index){
 		config.plugins.splice(index, 1);
-	}
+	};
 }]);
 
 app.service('pluginHttp', ['$http', 'notificationService', function($http, notificationService){

@@ -19,7 +19,7 @@
 						<span class="hint">This field is required.</span>
 					</td>
 					<td>
-						<a>Remove</a>
+						<a ng-click="configAdd.deleteCondition(config, $index)">Remove</a>
 					</td>
 				</tr>
 			</tbody>
@@ -40,7 +40,7 @@
 						<span class="hint">This field is required.</span>
 					</td>
 					<td>
-						<a>Remove</a>
+						<a ng-click="configAdd.deleteFilter(config, $index)">Remove</a>
 					</td>
 				</tr>
 			</tbody>
@@ -71,7 +71,7 @@
 						<span class="hint">This field is required.</span>
 					</td>
 					<td>
-						<a>Remove</a>
+						<a ng-click="configAdd.deleteFormField(config, $index)">Remove</a>
 					</td>
 				</tr>
 			</tbody>
